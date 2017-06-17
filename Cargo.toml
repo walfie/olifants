@@ -1,0 +1,16 @@
+[package]
+authors = ["Walfie <walfington@gmail.com>"]
+name = "olifants"
+version = "0.1.0"
+
+[dependencies]
+error-chain = "0.10"
+futures = "0.1"
+hyper = "0.11"
+hyper-tls = "0.1"
+native-tls = "0.1"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+serde_urlencoded = "0.5"
+tokio-core = "0.1"
