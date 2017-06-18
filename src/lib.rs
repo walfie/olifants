@@ -159,31 +159,44 @@ impl Client {
             })
     }
 
+    /* Other unimplemented endpoints include:
+       /api/v1/streaming/user
+       /api/v1/streaming/user/notification
+       /api/v1/streaming/public
+       /api/v1/streaming/public/local
+       /api/v1/streaming/hashtag?tag=hello
+       /api/v1/streaming/hashtag/local?tag=hello
+    */
     pub fn public_timeline<'a>(
-        &self,
+        &'a self,
         instance_url: &'a str,
         access_token: &'a str,
-    ) -> Result<impl Stream<Item = String, Error = Error>> {
-        let url = format!("{}/api/v1/streaming/public", instance_url)
+    ) -> impl Stream<Item = String, Error = Error> {
+        let request_url = format!("{}/api/v1/streaming/public", instance_url)
             .parse()
-            .chain_err(|| ErrorKind::InvalidUrl)?;
+            .chain_err(|| ErrorKind::InvalidUrl);
 
-        let mut req = hyper::Request::new(hyper::Method::Get, url);
-        req.headers_mut().set(hyper::header::Authorization(
-            hyper::header::Bearer { token: access_token.to_string() },
-        ));
+        future::result(request_url)
+            .and_then(move |url| {
+                let mut req = hyper::Request::new(hyper::Method::Get, url);
+                req.headers_mut().set(hyper::header::Authorization(
+                    hyper::header::Bearer { token: access_token.to_string() },
+                ));
 
-        let stream = self.http
-            .request(req)
-            .map(|res| res.body())
+                self.http.request(req).then(|result| {
+                    result.chain_err(|| ErrorKind::Http)
+                })
+            })
+            .map(|res| {
+                res.body().then(
+                    |result| result.chain_err(|| ErrorKind::Http),
+                )
+            })
             .flatten_stream()
-            .then(|result| result.chain_err(|| ErrorKind::Http))
-            .map(|chunk| {
+            .and_then(|chunk| {
                 std::str::from_utf8(&chunk)
-                    .expect("invalid UTF-8")
-                    .to_string()
-            });
-
-        Ok(stream)
+                    .chain_err(|| ErrorKind::Utf8)
+                    .map(|s| s.to_string())
+            })
     }
 }

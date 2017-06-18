@@ -13,10 +13,10 @@ fn main() {
 
     let access_token = "";
 
-    let timeline = client
-        .public_timeline("https://mastodon.social", access_token)
-        .expect("could not get public timeline");
+    let timeline = client.public_timeline("https://mastodon.social", access_token);
 
-    core.run(timeline.for_each(|s| Ok(print!("{}", s))))
-        .unwrap();
+    core.run(timeline.for_each(|s| {
+        print!("{}", s);
+        Ok(())
+    })).unwrap();
 }
