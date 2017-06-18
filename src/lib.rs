@@ -158,4 +158,32 @@ impl Client {
                 })
             })
     }
+
+    pub fn public_timeline<'a>(
+        &self,
+        instance_url: &'a str,
+        access_token: &'a str,
+    ) -> Result<impl Stream<Item = String, Error = Error>> {
+        let url = format!("{}/api/v1/streaming/public", instance_url)
+            .parse()
+            .chain_err(|| ErrorKind::InvalidUrl)?;
+
+        let mut req = hyper::Request::new(hyper::Method::Get, url);
+        req.headers_mut().set(hyper::header::Authorization(
+            hyper::header::Bearer { token: access_token.to_string() },
+        ));
+
+        let stream = self.http
+            .request(req)
+            .map(|res| res.body())
+            .flatten_stream()
+            .then(|result| result.chain_err(|| ErrorKind::Http))
+            .map(|chunk| {
+                std::str::from_utf8(&chunk)
+                    .expect("invalid UTF-8")
+                    .to_string()
+            });
+
+        Ok(stream)
+    }
 }
