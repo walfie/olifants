@@ -5,8 +5,9 @@
 extern crate serde_derive;
 #[macro_use]
 extern crate error_chain;
-
+#[macro_use]
 extern crate futures;
+
 extern crate hyper;
 extern crate hyper_tls;
 extern crate serde;
@@ -15,6 +16,7 @@ extern crate serde_urlencoded;
 extern crate tokio_core;
 
 mod error;
+mod timeline;
 
 use error::*;
 use futures::{Future, Stream};
@@ -54,7 +56,7 @@ pub struct Client {
 
 const REDIRECT_URI: &'static str = "urn:ietf:wg:oauth:2.0:oob";
 
-fn authorize_url(instance_url: &str, client_id: &str) -> String {
+pub fn authorize_url(instance_url: &str, client_id: &str) -> String {
     format!(
         "{}/oauth/authorize\
         ?client_id={}\
@@ -176,7 +178,7 @@ impl Client {
             .parse()
             .chain_err(|| ErrorKind::InvalidUrl);
 
-        future::result(request_url)
+        let chunks = future::result(request_url)
             .and_then(move |url| {
                 let mut req = hyper::Request::new(hyper::Method::Get, url);
                 req.headers_mut().set(hyper::header::Authorization(
@@ -192,11 +194,8 @@ impl Client {
                     |result| result.chain_err(|| ErrorKind::Http),
                 )
             })
-            .flatten_stream()
-            .and_then(|chunk| {
-                std::str::from_utf8(&chunk)
-                    .chain_err(|| ErrorKind::Utf8)
-                    .map(|s| s.to_string())
-            })
+            .flatten_stream();
+
+        timeline::Lines::new(chunks)
     }
 }
