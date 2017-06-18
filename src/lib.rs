@@ -39,8 +39,31 @@ pub struct RegistrationResponse {
     client_secret: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct TokenResponse {
+    access_token: String,
+    refresh_token: Option<String>,
+    token_type: String,
+    expires_in: Option<u64>,
+    scope: Option<String>,
+}
+
 pub struct Client {
     http: hyper::client::Client<hyper_tls::HttpsConnector<hyper::client::HttpConnector>>,
+}
+
+const REDIRECT_URI: &'static str = "urn:ietf:wg:oauth:2.0:oob";
+
+fn authorize_url(instance_url: &str, client_id: &str) -> String {
+    format!(
+        "{}/oauth/authorize\
+        ?client_id={}\
+        &response_type=code\
+        &redirect_uri={}",
+        instance_url,
+        client_id,
+        REDIRECT_URI
+    )
 }
 
 impl Client {
@@ -75,6 +98,49 @@ impl Client {
             .and_then(move |(url, params)| {
                 let mut req = hyper::Request::new(hyper::Method::Post, url);
                 req.set_body(params);
+
+                self.http.request(req).then(
+                    |r| r.chain_err(|| ErrorKind::Http),
+                )
+            })
+            .and_then(|res| {
+                res.body().concat2().then(
+                    |r| r.chain_err(|| ErrorKind::Http),
+                )
+            })
+            .and_then(|bytes| {
+                let json_str = std::str::from_utf8(&bytes).chain_err(|| ErrorKind::Api)?;
+                serde_json::from_str(json_str).chain_err(|| {
+                    ErrorKind::JsonDecode(json_str.to_string())
+                })
+            })
+    }
+
+    pub fn get_token<'a>(
+        &'a self,
+        instance_url: &'a str,
+        client_id: &'a str,
+        client_secret: &'a str,
+        code: &'a str,
+    ) -> impl Future<Item = TokenResponse, Error = Error> {
+        let request_url = format!(
+            "{}/oauth/token\
+            ?client_id={}\
+            &client_secret={}\
+            &code={}\
+            &grant_type=authorization_code\
+            &redirect_uri={}",
+            instance_url,
+            client_id,
+            client_secret,
+            code,
+            REDIRECT_URI
+        ).parse()
+            .chain_err(|| ErrorKind::InvalidUrl);
+
+        future::result(request_url)
+            .and_then(move |url| {
+                let req = hyper::Request::new(hyper::Method::Post, url);
 
                 self.http.request(req).then(
                     |r| r.chain_err(|| ErrorKind::Http),
