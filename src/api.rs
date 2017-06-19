@@ -20,7 +20,7 @@ pub struct Status {
     pub favourited: Option<bool>,
     pub sensitive: Option<bool>,
     pub spoiler_text: String,
-    pub visibility: String, // TODO: Enum
+    pub visibility: String, // TODO: Enum values -- direct, private, unlisted, public
     pub media_attachments: Vec<Attachment>,
     pub mentions: Vec<Mention>,
     pub tags: Vec<Tag>,
@@ -71,7 +71,7 @@ pub struct Account {
 pub struct Attachment {
     pub id: AttachmentId,
     #[serde(rename = "type")]
-    pub media_type: String,
+    pub media_type: String, // TODO: Enum values -- image, video, gifv
     pub url: String,
     pub remote_url: Option<String>,
     pub preview_url: String,
@@ -82,7 +82,7 @@ pub struct Attachment {
 pub struct Notification {
     pub id: i64,
     #[serde(rename = "type")]
-    pub notification_type: String,
+    pub notification_type: String, // TODO: Enum values -- mention, reblog, favourite, follow
     pub created_at: String,
     pub account: Account,
     pub status: Option<Status>,
