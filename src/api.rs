@@ -25,7 +25,7 @@ pub struct Status {
     pub mentions: Vec<Mention>,
     pub tags: Vec<Tag>,
     pub application: Option<Application>,
-    pub language: String,
+    pub language: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
