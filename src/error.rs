@@ -12,9 +12,6 @@ error_chain!{
         Http {
             description("HTTP error")
         }
-        Utf8 {
-            description("invalid UTF-8 string")
-        }
         Encode {
             description("could not encode value")
         }

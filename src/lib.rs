@@ -112,8 +112,8 @@ impl Client {
                 )
             })
             .and_then(|bytes| {
-                let json_str = std::str::from_utf8(&bytes).chain_err(|| ErrorKind::Api)?;
-                serde_json::from_str(json_str).chain_err(|| {
+                let json_str = String::from_utf8_lossy(&bytes);
+                serde_json::from_str(&json_str).chain_err(|| {
                     ErrorKind::JsonDecode(json_str.to_string())
                 })
             })
@@ -155,8 +155,8 @@ impl Client {
                 )
             })
             .and_then(|bytes| {
-                let json_str = std::str::from_utf8(&bytes).chain_err(|| ErrorKind::Api)?;
-                serde_json::from_str(json_str).chain_err(|| {
+                let json_str = String::from_utf8_lossy(&bytes);
+                serde_json::from_str(&json_str).chain_err(|| {
                     ErrorKind::JsonDecode(json_str.to_string())
                 })
             })

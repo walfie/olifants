@@ -143,14 +143,8 @@ where
             } else {
                 // Attempt to fill the buffer
                 if let Some(chunk) = try_ready!(self.stream.poll()) {
-                    match ::std::str::from_utf8(&chunk.as_ref()) {
-                        Ok(s) => {
-                            self.buffer.push_str(s);
-                        }
-                        Err(e) => {
-                            return Err(Error::with_chain(e, ErrorKind::Utf8));
-                        }
-                    }
+                    let s = String::from_utf8_lossy(&chunk.as_ref());
+                    self.buffer.push_str(&s);
                 } else {
                     return Ok(Async::Ready(None));
                 }
