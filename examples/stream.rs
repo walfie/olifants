@@ -4,7 +4,7 @@ extern crate futures;
 extern crate tokio_core;
 
 use futures::Stream;
-use olifants::Client;
+use olifants::{Client, TimelineType};
 use tokio_core::reactor::Core;
 
 fn main() {
@@ -13,7 +13,11 @@ fn main() {
 
     let access_token = "";
 
-    let timeline = client.public_timeline("https://mastodon.social", access_token);
+    let timeline = client.timeline(
+        "https://mastodon.social",
+        access_token,
+        TimelineType::Notification,
+    );
 
     core.run(timeline.for_each(|s| {
         println!("{:?}", s);

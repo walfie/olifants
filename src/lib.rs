@@ -23,6 +23,7 @@ use error::*;
 use futures::{Future, Stream};
 use futures::future;
 use hyper_tls::HttpsConnector;
+use std::borrow::Cow;
 use tokio_core::reactor::Handle;
 
 
@@ -67,6 +68,36 @@ pub fn authorize_url(instance_url: &str, client_id: &str) -> String {
         client_id,
         REDIRECT_URI
     )
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum TimelineType {
+    User,
+    Notification,
+    Federated,
+    Local,
+    Hashtag(String),
+    LocalHashtag(String),
+    Other(String),
+}
+
+impl TimelineType {
+    pub fn as_path<'a>(&self) -> Cow<'a, str> {
+        use self::TimelineType::*;
+
+        match *self {
+            User => "/api/v1/streaming/user".into(),
+            Notification => "/api/v1/streaming/user/notification".into(),
+            Federated => "/api/v1/streaming/public".into(),
+            Local => "/api/v1/streaming/public/local".into(),
+
+            // TODO: URL encode?
+            Hashtag(ref tag) => format!("/api/v1/streaming/hashtag?tag={}", tag).into(),
+            LocalHashtag(ref tag) => format!("/api/v1/streaming/hashtag/local?tag={}", tag).into(),
+
+            Other(ref path) => path.clone().into(),
+        }
+    }
 }
 
 impl Client {
@@ -162,20 +193,13 @@ impl Client {
             })
     }
 
-    /* Other unimplemented endpoints include:
-       /api/v1/streaming/user
-       /api/v1/streaming/user/notification
-       /api/v1/streaming/public
-       /api/v1/streaming/public/local
-       /api/v1/streaming/hashtag?tag=hello
-       /api/v1/streaming/hashtag/local?tag=hello
-    */
-    pub fn public_timeline<'a>(
+    pub fn timeline<'a>(
         &'a self,
         instance_url: &'a str,
         access_token: &'a str,
+        timeline_type: TimelineType,
     ) -> impl Stream<Item = timeline::Event, Error = Error> {
-        let request_url = format!("{}/api/v1/streaming/public", instance_url)
+        let request_url = format!("{}{}", instance_url, timeline_type.as_path())
             .parse()
             .chain_err(|| ErrorKind::InvalidUrl);
 
