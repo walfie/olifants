@@ -16,6 +16,7 @@ extern crate serde_urlencoded;
 extern crate tokio_core;
 
 mod error;
+mod api;
 mod timeline;
 
 use error::*;
@@ -173,7 +174,7 @@ impl Client {
         &'a self,
         instance_url: &'a str,
         access_token: &'a str,
-    ) -> impl Stream<Item = String, Error = Error> {
+    ) -> impl Stream<Item = timeline::Event, Error = Error> {
         let request_url = format!("{}/api/v1/streaming/public", instance_url)
             .parse()
             .chain_err(|| ErrorKind::InvalidUrl);
@@ -196,6 +197,6 @@ impl Client {
             })
             .flatten_stream();
 
-        timeline::Lines::new(chunks)
+        timeline::Timeline::from_lines(timeline::Lines::new(chunks))
     }
 }

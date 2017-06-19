@@ -16,7 +16,7 @@ fn main() {
     let timeline = client.public_timeline("https://mastodon.social", access_token);
 
     core.run(timeline.for_each(|s| {
-        print!("{}", s);
+        println!("{:?}", s);
         Ok(())
     })).unwrap();
 }
