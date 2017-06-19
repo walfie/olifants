@@ -85,8 +85,7 @@ where
                     } else {
                         // We're in an unexpected state, reset to be safe
                         self.waiting_for = None;
-                        let kind = ErrorKind::IllegalState("data", line);
-                        return Err(Error::from_kind(kind));
+                        bail!(ErrorKind::IllegalState("data", line));
                     }
                 } else if line.starts_with("event: ") {
                     let event_type = match &line[7..] {
@@ -94,15 +93,13 @@ where
                         "delete" => Delete,
                         "notification" => Notification,
                         other => {
-                            let kind = ErrorKind::UnknownEventType(other.to_string());
-                            return Err(Error::from_kind(kind));
+                            bail!(ErrorKind::UnknownEventType(other.to_string()));
                         }
                     };
 
                     self.waiting_for = Some(event_type);
                 } else if !line.is_empty() {
-                    let kind = ErrorKind::IllegalState("event", line);
-                    return Err(Error::from_kind(kind));
+                    bail!(ErrorKind::IllegalState("event", line));
                 }
             } else {
                 return Ok(Async::Ready(None));
