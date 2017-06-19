@@ -6,8 +6,8 @@ use serde_json;
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum EventType {
     Update,
-    Delete,
     Notification,
+    Delete,
 }
 
 #[derive(Debug)]
@@ -20,8 +20,8 @@ pub struct Timeline<S> {
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum Event {
     Update(Box<api::Status>),
-    Notification, // TODO
-    Delete(i64),
+    Notification(Box<api::Notification>),
+    Delete(api::StatusId),
     Heartbeat,
 }
 
@@ -67,13 +67,19 @@ where
                                     Async::Ready(Some(Event::Update(Box::new(status))))
                                 })
                             }
+                            Notification => {
+                                return serde_json::from_str(data)
+                                    .chain_err(|| ErrorKind::JsonDecode(data.to_string()))
+                                    .map(|notification| {
+                                        Async::Ready(
+                                            Some(Event::Notification(Box::new(notification))),
+                                        )
+                                    })
+                            }
                             Delete => {
-                                return data.parse::<i64>()
+                                return data.parse::<api::StatusId>()
                                     .chain_err(|| ErrorKind::InvalidNumber(data.to_string()))
                                     .map(|id| Async::Ready(Some(Event::Delete(id))))
-                            }
-                            Notification => {
-                                // Unimplemented
                             }
                         }
                     } else {
