@@ -16,7 +16,7 @@ fn main() {
     let timeline = client.timeline(
         "https://mastodon.social",
         access_token,
-        TimelineType::Notification,
+        TimelineType::Federated,
     );
 
     core.run(timeline.for_each(|s| {

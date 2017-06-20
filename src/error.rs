@@ -15,6 +15,9 @@ error_chain!{
         Encode {
             description("could not encode value")
         }
+        InvalidUtf8 {
+            description("bytes contained invalid UTF-8")
+        }
         JsonDecode(value: String) {
             description("invalid JSON")
             display("could not parse JSON:\n{}", value)

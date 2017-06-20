@@ -112,7 +112,7 @@ where
 #[must_use = "streams do nothing unless polled"]
 pub struct Lines<S> {
     stream: S,
-    buffer: String,
+    buffer: Vec<u8>,
 }
 
 impl<S, B> Lines<S>
@@ -123,7 +123,7 @@ where
     pub fn new(stream: S) -> Self {
         Lines {
             stream,
-            buffer: String::new(),
+            buffer: Vec::new(),
         }
     }
 }
@@ -138,16 +138,18 @@ where
 
     fn poll(&mut self) -> Result<Async<Option<Self::Item>>> {
         loop {
-            if let Some(index) = self.buffer.find('\n') {
+            if let Some(index) = self.buffer.iter().position(|c| *c == b'\n') {
                 let mut split = self.buffer.split_off(index + 1);
                 ::std::mem::swap(&mut self.buffer, &mut split);
                 split.pop(); // Remove trailing newline
-                return Ok(Async::Ready(Some(split)));
+
+                return String::from_utf8(split)
+                    .map(|line| Async::Ready(Some(line)))
+                    .chain_err(|| ErrorKind::InvalidUtf8);
             } else {
                 // Attempt to fill the buffer
                 if let Some(chunk) = try_ready!(self.stream.poll()) {
-                    let s = String::from_utf8_lossy(&chunk.as_ref());
-                    self.buffer.push_str(&s);
+                    self.buffer.extend_from_slice(&chunk.as_ref());
                 } else {
                     return Ok(Async::Ready(None));
                 }
@@ -165,32 +167,36 @@ mod test {
     #[test]
     #[allow(unused_must_use)]
     fn lines() {
+        let (msg_tx, msg_rx) = mpsc::unbounded::<&[u8]>();
+        let mut lines = Lines::new(msg_rx.map_err(|_| Error::from_kind(ErrorKind::Http)));
+
+        let send = move |msg| mpsc::UnboundedSender::send(&msg_tx, msg);
+        let mut expect = |value| assert_eq!(lines.poll().unwrap(), value);
+
         // Run on a task context
         futures::lazy(|| {
-            let (msg_tx, msg_rx) = mpsc::unbounded::<&str>();
-            let mut lines = Lines::new(msg_rx.map_err(|_| Error::from_kind(ErrorKind::Http)));
+            send("First".as_bytes());
+            expect(Async::NotReady);
+            send(" line".as_bytes());
+            expect(Async::NotReady);
 
-            let send = move |msg| mpsc::UnboundedSender::send(&msg_tx, msg);
+            send("\nSecond line\nThird line".as_bytes());
+            expect(Async::Ready(Some("First line".to_string())));
+            expect(Async::Ready(Some("Second line".to_string())));
 
-            send("First");
-            assert_eq!(lines.poll().unwrap(), Async::NotReady);
-            send(" line");
-            assert_eq!(lines.poll().unwrap(), Async::NotReady);
-            send("\nSecond line\nThird line");
-            assert_eq!(
-                lines.poll().unwrap(),
-                Async::Ready(Some("First line".to_string()))
-            );
-            assert_eq!(
-                lines.poll().unwrap(),
-                Async::Ready(Some("Second line".to_string()))
-            );
-            assert_eq!(lines.poll().unwrap(), Async::NotReady);
-            send("\n");
-            assert_eq!(
-                lines.poll().unwrap(),
-                Async::Ready(Some("Third line".to_string()))
-            );
+            send("\n".as_bytes());
+            expect(Async::Ready(Some("Third line".to_string())));
+
+            // Send two chunks that, individually, are invalid UTF-8, but
+            // combine to form a valid UTF-8 character.
+            let cool = "🆒\n";
+            assert!(!cool.is_char_boundary(1));
+            let (cool1, cool2) = cool.as_bytes().split_at(1);
+
+            send(cool1);
+            expect(Async::NotReady);
+            send(cool2);
+            expect(Async::Ready(Some("🆒".to_string())));
 
             Ok::<(), ()>(())
         }).wait()
