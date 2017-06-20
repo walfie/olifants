@@ -4,7 +4,7 @@ extern crate futures;
 extern crate tokio_core;
 
 use futures::Stream;
-use olifants::{Client, TimelineType};
+use olifants::{Client, timeline};
 use tokio_core::reactor::Core;
 
 fn main() {
@@ -16,7 +16,7 @@ fn main() {
     let timeline = client.timeline(
         "https://mastodon.social",
         access_token,
-        TimelineType::Federated,
+        timeline::Endpoint::Federated,
     );
 
     core.run(timeline.for_each(|s| {

@@ -15,42 +15,15 @@ extern crate serde_json;
 extern crate serde_urlencoded;
 extern crate tokio_core;
 
-mod error;
-mod api;
-mod timeline;
+pub mod error;
+pub mod api;
+pub mod timeline;
 
 use error::*;
 use futures::{Future, Stream};
 use futures::future;
 use hyper_tls::HttpsConnector;
-use std::borrow::Cow;
 use tokio_core::reactor::Handle;
-
-
-#[derive(Debug, Serialize)]
-pub struct Application<'a> {
-    pub client_name: &'a str,
-    pub redirect_uris: &'a str,
-    pub scopes: &'a str,
-    pub website: &'a str,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct RegistrationResponse {
-    id: u32,
-    redirect_uri: String,
-    client_id: String,
-    client_secret: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct TokenResponse {
-    access_token: String,
-    refresh_token: Option<String>,
-    token_type: String,
-    expires_in: Option<u64>,
-    scope: Option<String>,
-}
 
 pub struct Client {
     http: hyper::client::Client<hyper_tls::HttpsConnector<hyper::client::HttpConnector>>,
@@ -70,36 +43,6 @@ pub fn authorize_url(instance_url: &str, client_id: &str) -> String {
     )
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum TimelineType {
-    User,
-    Notification,
-    Federated,
-    Local,
-    Hashtag(String),
-    LocalHashtag(String),
-    Other(String),
-}
-
-impl TimelineType {
-    pub fn as_path<'a>(&self) -> Cow<'a, str> {
-        use self::TimelineType::*;
-
-        match *self {
-            User => "/api/v1/streaming/user".into(),
-            Notification => "/api/v1/streaming/user/notification".into(),
-            Federated => "/api/v1/streaming/public".into(),
-            Local => "/api/v1/streaming/public/local".into(),
-
-            // TODO: URL encode?
-            Hashtag(ref tag) => format!("/api/v1/streaming/hashtag?tag={}", tag).into(),
-            LocalHashtag(ref tag) => format!("/api/v1/streaming/hashtag/local?tag={}", tag).into(),
-
-            Other(ref path) => path.clone().into(),
-        }
-    }
-}
-
 impl Client {
     pub fn new(handle: &Handle) -> Result<Self> {
         // TODO: Don't hardcode 4
@@ -117,8 +60,8 @@ impl Client {
     pub fn register<'a>(
         &'a self,
         instance_url: &'a str,
-        app: &'a Application,
-    ) -> impl Future<Item = RegistrationResponse, Error = Error> {
+        app: &'a api::oauth::Application,
+    ) -> impl Future<Item = api::oauth::RegistrationResponse, Error = Error> {
         let app_params = serde_urlencoded::to_string(app).chain_err(|| ErrorKind::Encode);
 
         let request_url = format!("{}/api/v1/apps", instance_url).parse().chain_err(
@@ -156,7 +99,7 @@ impl Client {
         client_id: &'a str,
         client_secret: &'a str,
         code: &'a str,
-    ) -> impl Future<Item = TokenResponse, Error = Error> {
+    ) -> impl Future<Item = api::oauth::TokenResponse, Error = Error> {
         let request_url = format!(
             "{}/oauth/token\
             ?client_id={}\
@@ -197,9 +140,9 @@ impl Client {
         &'a self,
         instance_url: &'a str,
         access_token: &'a str,
-        timeline_type: TimelineType,
+        endpoint: timeline::Endpoint,
     ) -> impl Stream<Item = timeline::Event, Error = Error> {
-        let request_url = format!("{}{}", instance_url, timeline_type.as_path())
+        let request_url = format!("{}{}", instance_url, endpoint.as_path())
             .parse()
             .chain_err(|| ErrorKind::InvalidUrl);
 

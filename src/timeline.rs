@@ -2,6 +2,37 @@ use api;
 use error::*;
 use futures::{Async, Stream};
 use serde_json;
+use std::borrow::Cow;
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Endpoint {
+    User,
+    Notification,
+    Federated,
+    Local,
+    Hashtag(String),
+    LocalHashtag(String),
+    Other(String),
+}
+
+impl Endpoint {
+    pub fn as_path<'a>(&self) -> Cow<'a, str> {
+        use self::Endpoint::*;
+
+        match *self {
+            User => "/api/v1/streaming/user".into(),
+            Notification => "/api/v1/streaming/user/notification".into(),
+            Federated => "/api/v1/streaming/public".into(),
+            Local => "/api/v1/streaming/public/local".into(),
+
+            // TODO: URL encode?
+            Hashtag(ref tag) => format!("/api/v1/streaming/hashtag?tag={}", tag).into(),
+            LocalHashtag(ref tag) => format!("/api/v1/streaming/hashtag/local?tag={}", tag).into(),
+
+            Other(ref path) => path.clone().into(),
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum EventType {
@@ -19,9 +50,9 @@ pub struct Timeline<S> {
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum Event {
-    Update(Box<api::Status>),
-    Notification(Box<api::Notification>),
-    Delete(api::StatusId),
+    Update(Box<api::v1::Status>),
+    Notification(Box<api::v1::Notification>),
+    Delete(api::v1::StatusId),
     Heartbeat,
 }
 
@@ -77,7 +108,7 @@ where
                                     })
                             }
                             Delete => {
-                                return data.parse::<api::StatusId>()
+                                return data.parse::<api::v1::StatusId>()
                                     .chain_err(|| ErrorKind::InvalidNumber(data.to_string()))
                                     .map(|id| Async::Ready(Some(Event::Delete(id))))
                             }
