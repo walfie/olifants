@@ -46,9 +46,9 @@ pub fn authorize_url(instance_url: &str, client_id: &str) -> String {
 impl Client {
     pub fn new(handle: &Handle) -> Result<Self> {
         // TODO: Don't hardcode 4
-        let connector = HttpsConnector::new(4, &handle).chain_err(|| {
-            ErrorKind::ClientInitialization
-        })?;
+        let connector = HttpsConnector::new(4, &handle).chain_err(
+            || ErrorKind::Initialization,
+        )?;
 
         let http = hyper::Client::configure().connector(connector).build(
             &handle,
@@ -62,11 +62,11 @@ impl Client {
         instance_url: &'a str,
         app: &'a api::oauth::Application,
     ) -> impl Future<Item = api::oauth::RegistrationResponse, Error = Error> {
-        let app_params = serde_urlencoded::to_string(app).chain_err(|| ErrorKind::Encode);
+        let app_params = serde_urlencoded::to_string(app).chain_err(|| ErrorKind::Serialize);
 
         let request_url = format!("{}/api/v1/apps", instance_url).parse().chain_err(
             || {
-                ErrorKind::InvalidUrl
+                ErrorKind::Uri(instance_url.to_string())
             },
         );
 
@@ -88,7 +88,7 @@ impl Client {
             .and_then(|bytes| {
                 let json_str = String::from_utf8_lossy(&bytes);
                 serde_json::from_str(&json_str).chain_err(|| {
-                    ErrorKind::JsonDecode(json_str.to_string())
+                    ErrorKind::Deserialize(json_str.to_string())
                 })
             })
     }
@@ -112,10 +112,13 @@ impl Client {
             client_secret,
             code,
             REDIRECT_URI
-        ).parse()
-            .chain_err(|| ErrorKind::InvalidUrl);
+        );
 
-        future::result(request_url)
+        let parsed_url = request_url.parse().chain_err(|| {
+            ErrorKind::Uri(request_url.to_string())
+        });
+
+        future::result(parsed_url)
             .and_then(move |url| {
                 let req = hyper::Request::new(hyper::Method::Post, url);
 
@@ -131,7 +134,7 @@ impl Client {
             .and_then(|bytes| {
                 let json_str = String::from_utf8_lossy(&bytes);
                 serde_json::from_str(&json_str).chain_err(|| {
-                    ErrorKind::JsonDecode(json_str.to_string())
+                    ErrorKind::Deserialize(json_str.to_string())
                 })
             })
     }
@@ -142,11 +145,13 @@ impl Client {
         access_token: &'a str,
         endpoint: timeline::Endpoint,
     ) -> impl Stream<Item = timeline::Event, Error = Error> {
-        let request_url = format!("{}{}", instance_url, endpoint.as_path())
-            .parse()
-            .chain_err(|| ErrorKind::InvalidUrl);
+        let request_url = format!("{}{}", instance_url, endpoint.as_path());
 
-        let chunks = future::result(request_url)
+        let parsed_url = request_url.parse().chain_err(|| {
+            ErrorKind::Uri(request_url.to_string())
+        });
+
+        let chunks = future::result(parsed_url)
             .and_then(move |url| {
                 let mut req = hyper::Request::new(hyper::Method::Get, url);
                 req.headers_mut().set(hyper::header::Authorization(

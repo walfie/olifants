@@ -93,14 +93,14 @@ where
                         match event_type {
                             Update => {
                                 return serde_json::from_str(data).chain_err(|| {
-                                    ErrorKind::JsonDecode(data.to_string())
+                                    ErrorKind::Deserialize(data.to_string())
                                 }).map(|status| {
                                     Async::Ready(Some(Event::Update(Box::new(status))))
                                 })
                             }
                             Notification => {
                                 return serde_json::from_str(data)
-                                    .chain_err(|| ErrorKind::JsonDecode(data.to_string()))
+                                    .chain_err(|| ErrorKind::Deserialize(data.to_string()))
                                     .map(|notification| {
                                         Async::Ready(
                                             Some(Event::Notification(Box::new(notification))),
@@ -109,14 +109,14 @@ where
                             }
                             Delete => {
                                 return data.parse::<api::v1::StatusId>()
-                                    .chain_err(|| ErrorKind::InvalidNumber(data.to_string()))
+                                    .chain_err(|| ErrorKind::StatusId(data.to_string()))
                                     .map(|id| Async::Ready(Some(Event::Delete(id))))
                             }
                         }
                     } else {
                         // We're in an unexpected state, reset to be safe
                         self.waiting_for = None;
-                        bail!(ErrorKind::IllegalState("data", line));
+                        bail!(ErrorKind::StreamingState("data", line));
                     }
                 } else if line.starts_with("event: ") {
                     let event_type = match &line[7..] {
@@ -124,13 +124,13 @@ where
                         "delete" => Delete,
                         "notification" => Notification,
                         other => {
-                            bail!(ErrorKind::UnknownEventType(other.to_string()));
+                            bail!(ErrorKind::EventType(other.to_string()));
                         }
                     };
 
                     self.waiting_for = Some(event_type);
                 } else if !line.is_empty() {
-                    bail!(ErrorKind::IllegalState("event", line));
+                    bail!(ErrorKind::StreamingState("event", line));
                 }
             } else {
                 return Ok(Async::Ready(None));
@@ -176,7 +176,7 @@ where
 
                 return String::from_utf8(split)
                     .map(|line| Async::Ready(Some(line)))
-                    .chain_err(|| ErrorKind::InvalidUtf8);
+                    .chain_err(|| ErrorKind::Utf8);
             } else {
                 // Attempt to fill the buffer
                 if let Some(chunk) = try_ready!(self.stream.poll()) {

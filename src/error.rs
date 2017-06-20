@@ -1,38 +1,36 @@
 error_chain!{
     errors {
-        ClientInitialization {
+        Initialization {
             description("failed to initialize client")
         }
-        InvalidUrl {
-            description("invalid URL")
-        }
-        Api {
-            description("error returned from API")
+        Uri(uri: String) {
+            description("invalid URI")
+            display("could not parse URI: `{}`", uri)
         }
         Http {
             description("HTTP error")
         }
-        Encode {
-            description("could not encode value")
+        Serialize {
+            description("could not serialize value")
         }
-        InvalidUtf8 {
+        Deserialize(value: String) {
+            description("could not deserialize value")
+            display("could not deserialize value: `{}`", value)
+        }
+        Utf8 {
             description("bytes contained invalid UTF-8")
         }
-        JsonDecode(value: String) {
-            description("invalid JSON")
-            display("could not parse JSON:\n{}", value)
-        }
-        UnknownEventType(value: String) {
+        EventType(value: String) {
             description("unknown event type")
-            display("unknown event type returned from API: {}", value)
+            display("unknown event type returned from API: `{}`", value)
         }
-        IllegalState(expected: &'static str, actual: String) {
+        StreamingState(expected: &'static str, actual: String) {
             description("streaming API is in an unexpected state")
-            display("expected `{}` from API, received `{}`", expected, actual)
+            display("expected `{}` from streaming API, received `{}`", expected, actual)
         }
-        InvalidNumber(value: String) {
-            description("received invalid number from API")
-            display("could not parse {} as an integer", value)
+        StatusId(value: String) {
+            description("received invalid status ID from API")
+            display("could not parse status ID `{}` as an integer", value)
         }
     }
 }
