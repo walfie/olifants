@@ -82,12 +82,7 @@ impl Client {
             },
         );
 
-        let body = url::form_urlencoded::Serializer::new(String::new())
-            .append_pair("client_name", app.client_name)
-            .append_pair("redirect_uris", app.redirect_uris)
-            .append_pair("scopes", app.scopes)
-            .append_pair("website", app.website)
-            .finish();
+        let body = app.as_form_urlencoded();
 
         self.request(request_url, hyper::Method::Post, |mut req| {
             req.set_body(body);

@@ -4,17 +4,18 @@ extern crate futures;
 extern crate tokio_core;
 
 use futures::Future;
-use olifants::{Client, api};
+use olifants::Client;
+use olifants::api::oauth;
 use tokio_core::reactor::Core;
 
 fn main() {
     let mut core = Core::new().expect("could not create Core");
     let client = Client::new(&core.handle(), "olifants").expect("could not create client");
 
-    let app = api::oauth::App {
+    let app = oauth::App {
         client_name: "Example",
-        redirect_uris: api::oauth::OOB_REDIRECT_URI,
-        scopes: "read",
+        redirect_uris: oauth::OOB_REDIRECT_URI,
+        scopes: &[oauth::Scope::Read],
         website: "https://example.com",
     };
 
