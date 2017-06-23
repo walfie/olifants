@@ -1,5 +1,5 @@
 #[derive(Debug, Serialize)]
-pub struct Application<'a> {
+pub struct App<'a> {
     pub client_name: &'a str,
     pub redirect_uris: &'a str,
     pub scopes: &'a str,
@@ -7,7 +7,7 @@ pub struct Application<'a> {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct RegistrationResponse {
+pub struct CreateAppResponse {
     pub id: u32,
     pub redirect_uri: String,
     pub client_id: String,

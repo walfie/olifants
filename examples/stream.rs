@@ -9,7 +9,7 @@ use tokio_core::reactor::Core;
 
 fn main() {
     let mut core = Core::new().expect("could not create Core");
-    let client = Client::new(&core.handle()).expect("could not create client");
+    let client = Client::new(&core.handle(), "olifants").expect("could not create client");
 
     let access_token = "";
 

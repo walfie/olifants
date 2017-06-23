@@ -23,14 +23,19 @@ use error::*;
 use futures::{Future, Stream};
 use futures::future;
 use hyper_tls::HttpsConnector;
+use std::borrow::Cow;
 use tokio_core::reactor::Handle;
 
 pub struct Client {
     http: hyper::client::Client<hyper_tls::HttpsConnector<hyper::client::HttpConnector>>,
+    user_agent: hyper::header::UserAgent,
 }
 
 impl Client {
-    pub fn new(handle: &Handle) -> Result<Self> {
+    pub fn new<U>(handle: &Handle, user_agent: U) -> Result<Self>
+    where
+        U: Into<Cow<'static, str>>,
+    {
         // TODO: Don't hardcode 4
         let connector = HttpsConnector::new(4, &handle).chain_err(
             || ErrorKind::Initialization,
@@ -40,14 +45,35 @@ impl Client {
             &handle,
         );
 
-        Ok(Client { http })
+        Ok(Client {
+            http,
+            user_agent: hyper::header::UserAgent::new(user_agent),
+        })
+    }
+
+    fn request<'a, F>(
+        &'a self,
+        uri: Result<hyper::Uri>,
+        to_request: F,
+    ) -> impl Future<Item = hyper::Response, Error = Error> + 'a
+    where
+        F: FnOnce(hyper::Uri) -> hyper::Request + 'a,
+    {
+        future::result(uri).and_then(move |u| {
+            let mut request = to_request(u);
+            request.headers_mut().set(self.user_agent.clone());
+
+            self.http.request(request).then(|r| {
+                r.chain_err(|| ErrorKind::Http)
+            })
+        })
     }
 
     pub fn create_app<'a>(
         &'a self,
-        instance_url: &'a str,
-        app: &'a api::oauth::Application,
-    ) -> impl Future<Item = api::oauth::RegistrationResponse, Error = Error> {
+        instance_url: &str,
+        app: &api::oauth::App,
+    ) -> impl Future<Item = api::oauth::CreateAppResponse, Error = Error> + 'a {
         let request_url = format!("{}/api/v1/apps", instance_url).parse().chain_err(
             || {
                 ErrorKind::Uri(instance_url.to_string())
@@ -61,17 +87,11 @@ impl Client {
             .append_pair("website", app.website)
             .finish();
 
-        future::result(request_url)
-            .and_then(move |url| {
-                let mut req = hyper::Request::new(hyper::Method::Post, url);
-
-                req.set_body(body);
-
-                self.http.request(req).then(
-                    |r| r.chain_err(|| ErrorKind::Http),
-                )
-            })
-            .and_then(|res| {
+        self.request(request_url, |url| {
+            let mut req = hyper::Request::new(hyper::Method::Post, url);
+            req.set_body(body);
+            req
+        }).and_then(|res| {
                 res.body().concat2().then(
                     |r| r.chain_err(|| ErrorKind::Http),
                 )
@@ -86,36 +106,29 @@ impl Client {
 
     pub fn get_token<'a>(
         &'a self,
-        instance_url: &'a str,
-        client_id: &'a str,
-        client_secret: &'a str,
-        code: &'a str,
-    ) -> impl Future<Item = api::oauth::TokenResponse, Error = Error> {
+        instance_url: &str,
+        client_id: &str,
+        client_secret: &str,
+        code: &str,
+    ) -> impl Future<Item = api::oauth::TokenResponse, Error = Error> + 'a {
         let base_url = format!("{}/oauth/token", instance_url);
 
-        let request_url =
-            url::Url::parse(&base_url).chain_err(|| ErrorKind::Uri(base_url.to_string()));
+        let request_url = url::Url::parse(&base_url)
+            .chain_err(|| ErrorKind::Uri(base_url.to_string()))
+            .and_then(|mut url| {
+                url.query_pairs_mut()
+                    .append_pair("client_id", client_id)
+                    .append_pair("client_secret", client_secret)
+                    .append_pair("code", code);
 
-        let parsed_url = request_url.and_then(|mut url| {
-            url.query_pairs_mut()
-                .append_pair("client_id", client_id)
-                .append_pair("client_secret", client_secret)
-                .append_pair("code", code);
+                url.as_str().parse::<hyper::Uri>().chain_err(|| {
+                    ErrorKind::Uri(url.into_string())
+                })
+            });
 
-            url.as_str().parse::<hyper::Uri>().chain_err(|| {
-                ErrorKind::Uri(url.into_string())
-            })
-        });
-
-        future::result(parsed_url)
-            .and_then(move |url| {
-                let req = hyper::Request::new(hyper::Method::Post, url);
-
-                self.http.request(req).then(
-                    |r| r.chain_err(|| ErrorKind::Http),
-                )
-            })
-            .and_then(|res| {
+        self.request(request_url, move |url| {
+            hyper::Request::new(hyper::Method::Post, url)
+        }).and_then(|res| {
                 res.body().concat2().then(
                     |r| r.chain_err(|| ErrorKind::Http),
                 )
@@ -128,30 +141,29 @@ impl Client {
             })
     }
 
-    pub fn timeline<'a>(
+    pub fn timeline<'a, S>(
         &'a self,
         instance_url: &'a str,
-        access_token: &'a str,
+        access_token: S,
         endpoint: timeline::Endpoint,
-    ) -> impl Stream<Item = timeline::Event, Error = Error> {
+    ) -> impl Stream<Item = timeline::Event, Error = Error> + 'a
+    where
+        S: Into<String> + 'a,
+    {
         let request_url = format!("{}{}", instance_url, endpoint.as_path());
 
         let parsed_url = request_url.parse().chain_err(|| {
             ErrorKind::Uri(request_url.to_string())
         });
 
-        let chunks = future::result(parsed_url)
-            .and_then(move |url| {
-                let mut req = hyper::Request::new(hyper::Method::Get, url);
-                req.headers_mut().set(hyper::header::Authorization(
-                    hyper::header::Bearer { token: access_token.to_string() },
-                ));
+        let chunks = self.request(parsed_url, move |url| {
+            let mut req = hyper::Request::new(hyper::Method::Get, url);
+            req.headers_mut().set(hyper::header::Authorization(
+                hyper::header::Bearer { token: access_token.into() },
+            ));
 
-                self.http.request(req).then(|result| {
-                    result.chain_err(|| ErrorKind::Http)
-                })
-            })
-            .map(|res| {
+            req
+        }).map(|res| {
                 res.body().then(
                     |result| result.chain_err(|| ErrorKind::Http),
                 )
