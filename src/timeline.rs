@@ -170,6 +170,7 @@ where
     fn poll(&mut self) -> Result<Async<Option<Self::Item>>> {
         loop {
             if let Some(index) = self.buffer.iter().position(|c| *c == b'\n') {
+                // Buffer contains a newline, split the buffer and return
                 let mut split = self.buffer.split_off(index + 1);
                 ::std::mem::swap(&mut self.buffer, &mut split);
                 split.pop(); // Remove trailing newline
@@ -177,13 +178,12 @@ where
                 return String::from_utf8(split)
                     .map(|line| Async::Ready(Some(line)))
                     .chain_err(|| ErrorKind::Utf8);
+            } else if let Some(chunk) = try_ready!(self.stream.poll()) {
+                // No newline in current chunk, attempt to fill the buffer
+                self.buffer.extend_from_slice(&chunk.as_ref());
             } else {
-                // Attempt to fill the buffer
-                if let Some(chunk) = try_ready!(self.stream.poll()) {
-                    self.buffer.extend_from_slice(&chunk.as_ref());
-                } else {
-                    return Ok(Async::Ready(None));
-                }
+                // Underlying stream is finished
+                return Ok(Async::Ready(None));
             }
         }
     }
