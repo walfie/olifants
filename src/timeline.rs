@@ -17,6 +17,7 @@ pub enum Endpoint {
 
 impl Endpoint {
     pub fn as_path<'a>(&self) -> Cow<'a, str> {
+        use url::percent_encoding::{QUERY_ENCODE_SET, utf8_percent_encode};
         use self::Endpoint::*;
 
         match *self {
@@ -25,9 +26,14 @@ impl Endpoint {
             Federated => "/api/v1/streaming/public".into(),
             Local => "/api/v1/streaming/public/local".into(),
 
-            // TODO: URL encode?
-            Hashtag(ref tag) => format!("/api/v1/streaming/hashtag?tag={}", tag).into(),
-            LocalHashtag(ref tag) => format!("/api/v1/streaming/hashtag/local?tag={}", tag).into(),
+            Hashtag(ref tag) => {
+                let encoded_tag = utf8_percent_encode(tag, QUERY_ENCODE_SET);
+                format!("/api/v1/streaming/hashtag?tag={}", encoded_tag).into()
+            }
+            LocalHashtag(ref tag) => {
+                let encoded_tag = utf8_percent_encode(tag, QUERY_ENCODE_SET);
+                format!("/api/v1/streaming/hashtag/local?tag={}", encoded_tag).into()
+            }
 
             Other(ref path) => path.clone().into(),
         }
@@ -190,13 +196,24 @@ where
 }
 
 #[cfg(test)]
+#[allow(unused_must_use)]
 mod test {
     use super::*;
     use futures::{self, Future, Stream};
     use futures::unsync::mpsc;
 
     #[test]
-    #[allow(unused_must_use)]
+    fn endpoint_encoding() {
+        let path = Endpoint::Hashtag("こんにちは".into()).as_path();
+        assert_eq!(
+            path,
+            "/api/v1/streaming/hashtag?\
+            tag=%E3%81%93%E3%82%93%E3%81%AB%E3%81%A1%E3%81%AF"
+        );
+        assert!(path.parse::<::hyper::Uri>().is_ok());
+    }
+
+    #[test]
     fn lines() {
         let (msg_tx, msg_rx) = mpsc::unbounded::<&[u8]>();
         let mut lines = Lines::new(msg_rx.map_err(|_| Error::from_kind(ErrorKind::Http)));
