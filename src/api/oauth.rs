@@ -22,3 +22,17 @@ pub struct TokenResponse {
     pub expires_in: Option<u64>,
     pub scope: Option<String>,
 }
+
+pub const OOB_REDIRECT_URI: &'static str = "urn:ietf:wg:oauth:2.0:oob";
+
+pub fn authorization_url(instance_url: &str, client_id: &str, redirect_uri: &str) -> String {
+    format!(
+        "{}/oauth/authorize\
+        ?client_id={}\
+        &response_type=code\
+        &redirect_uri={}",
+        instance_url,
+        client_id,
+        redirect_uri
+    )
+}

@@ -13,14 +13,14 @@ fn main() {
 
     let app = api::oauth::Application {
         client_name: "Example",
-        redirect_uris: "urn:ietf:wg:oauth:2.0:oob",
+        redirect_uris: api::oauth::OOB_REDIRECT_URI,
         scopes: "read",
         website: "https://example.com",
     };
 
-    let register = client.register("https://mastodon.social", &app);
+    let create = client.create_app("https://mastodon.social", &app);
 
-    core.run(register.then(|result| {
+    core.run(create.then(|result| {
         println!("{:?}", result);
         result
     })).unwrap();

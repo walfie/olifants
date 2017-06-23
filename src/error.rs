@@ -10,9 +10,6 @@ error_chain!{
         Http {
             description("HTTP error")
         }
-        Serialize {
-            description("could not serialize value")
-        }
         Deserialize(value: String) {
             description("could not deserialize value")
             display("could not deserialize value: `{}`", value)

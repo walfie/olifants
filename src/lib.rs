@@ -12,8 +12,8 @@ extern crate hyper;
 extern crate hyper_tls;
 extern crate serde;
 extern crate serde_json;
-extern crate serde_urlencoded;
 extern crate tokio_core;
+extern crate url;
 
 pub mod error;
 pub mod api;
@@ -27,20 +27,6 @@ use tokio_core::reactor::Handle;
 
 pub struct Client {
     http: hyper::client::Client<hyper_tls::HttpsConnector<hyper::client::HttpConnector>>,
-}
-
-const REDIRECT_URI: &'static str = "urn:ietf:wg:oauth:2.0:oob";
-
-pub fn authorize_url(instance_url: &str, client_id: &str) -> String {
-    format!(
-        "{}/oauth/authorize\
-        ?client_id={}\
-        &response_type=code\
-        &redirect_uri={}",
-        instance_url,
-        client_id,
-        REDIRECT_URI
-    )
 }
 
 impl Client {
@@ -57,24 +43,29 @@ impl Client {
         Ok(Client { http })
     }
 
-    pub fn register<'a>(
+    pub fn create_app<'a>(
         &'a self,
         instance_url: &'a str,
         app: &'a api::oauth::Application,
     ) -> impl Future<Item = api::oauth::RegistrationResponse, Error = Error> {
-        let app_params = serde_urlencoded::to_string(app).chain_err(|| ErrorKind::Serialize);
-
         let request_url = format!("{}/api/v1/apps", instance_url).parse().chain_err(
             || {
                 ErrorKind::Uri(instance_url.to_string())
             },
         );
 
+        let body = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("client_name", app.client_name)
+            .append_pair("redirect_uris", app.redirect_uris)
+            .append_pair("scopes", app.scopes)
+            .append_pair("website", app.website)
+            .finish();
+
         future::result(request_url)
-            .join(future::result(app_params))
-            .and_then(move |(url, params)| {
+            .and_then(move |url| {
                 let mut req = hyper::Request::new(hyper::Method::Post, url);
-                req.set_body(params);
+
+                req.set_body(body);
 
                 self.http.request(req).then(
                     |r| r.chain_err(|| ErrorKind::Http),
@@ -100,22 +91,20 @@ impl Client {
         client_secret: &'a str,
         code: &'a str,
     ) -> impl Future<Item = api::oauth::TokenResponse, Error = Error> {
-        let request_url = format!(
-            "{}/oauth/token\
-            ?client_id={}\
-            &client_secret={}\
-            &code={}\
-            &grant_type=authorization_code\
-            &redirect_uri={}",
-            instance_url,
-            client_id,
-            client_secret,
-            code,
-            REDIRECT_URI
-        );
+        let base_url = format!("{}/oauth/token", instance_url);
 
-        let parsed_url = request_url.parse().chain_err(|| {
-            ErrorKind::Uri(request_url.to_string())
+        let request_url =
+            url::Url::parse(&base_url).chain_err(|| ErrorKind::Uri(base_url.to_string()));
+
+        let parsed_url = request_url.and_then(|mut url| {
+            url.query_pairs_mut()
+                .append_pair("client_id", client_id)
+                .append_pair("client_secret", client_secret)
+                .append_pair("code", code);
+
+            url.as_str().parse::<hyper::Uri>().chain_err(|| {
+                ErrorKind::Uri(url.into_string())
+            })
         });
 
         future::result(parsed_url)
