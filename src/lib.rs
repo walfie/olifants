@@ -20,8 +20,7 @@ pub mod api;
 pub mod timeline;
 
 use error::*;
-use futures::{Future, Stream};
-use futures::future;
+use futures::{Future, IntoFuture, Stream};
 use hyper_tls::HttpsConnector;
 use std::borrow::Cow;
 use tokio_core::reactor::Handle;
@@ -51,8 +50,8 @@ impl Client {
         })
     }
 
-    fn request<'a, F>(
-        &'a self,
+    fn request<F>(
+        &self,
         uri: Result<hyper::Uri>,
         method: hyper::Method,
         modify_request: F,
@@ -60,23 +59,23 @@ impl Client {
     where
         F: FnOnce(hyper::Request) -> hyper::Request,
     {
-        future::result(uri).and_then(move |u| {
-            let mut request = hyper::Request::new(method, u);
-            request = modify_request(request);
+        uri.map(move |valid_uri| {
+            let mut req = hyper::Request::new(method, valid_uri);
+            req.headers_mut().set(self.user_agent.clone());
+            req = modify_request(req);
 
-            request.headers_mut().set(self.user_agent.clone());
-
-            self.http.request(request).then(|r| {
-                r.chain_err(|| ErrorKind::Http)
-            })
-        })
+            self.http.request(req).then(
+                |r| r.chain_err(|| ErrorKind::Http),
+            )
+        }).into_future()
+            .flatten()
     }
 
-    pub fn create_app<'a>(
-        &'a self,
+    pub fn create_app(
+        &self,
         instance_url: &str,
         app: &api::oauth::App,
-    ) -> impl Future<Item = api::oauth::CreateAppResponse, Error = Error> + 'a {
+    ) -> impl Future<Item = api::oauth::CreateAppResponse, Error = Error> {
         let request_url = format!("{}/api/v1/apps", instance_url).parse().chain_err(
             || {
                 ErrorKind::Uri(instance_url.to_string())
@@ -106,13 +105,13 @@ impl Client {
             })
     }
 
-    pub fn get_token<'a>(
-        &'a self,
+    pub fn get_token(
+        &self,
         instance_url: &str,
         client_id: &str,
         client_secret: &str,
         code: &str,
-    ) -> impl Future<Item = api::oauth::TokenResponse, Error = Error> + 'a {
+    ) -> impl Future<Item = api::oauth::TokenResponse, Error = Error> {
         let base_url = format!("{}/oauth/token", instance_url);
 
         let request_url = url::Url::parse(&base_url)
@@ -142,14 +141,14 @@ impl Client {
             })
     }
 
-    pub fn timeline<'a, S>(
-        &'a self,
-        instance_url: &'a str,
+    pub fn timeline<S>(
+        &self,
+        instance_url: &str,
         access_token: S,
         endpoint: timeline::Endpoint,
-    ) -> impl Stream<Item = timeline::Event, Error = Error> + 'a
+    ) -> impl Stream<Item = timeline::Event, Error = Error>
     where
-        S: Into<String> + 'a,
+        S: Into<String>,
     {
         let request_url = format!("{}{}", instance_url, endpoint.as_path());
 
