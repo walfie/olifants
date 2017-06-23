@@ -48,6 +48,13 @@ impl Scope {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+pub struct ErrorResponse {
+    error: String,
+    error_description: Option<String>,
+    error_uri: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct CreateAppResponse {
     pub id: u32,
     pub redirect_uri: String,
