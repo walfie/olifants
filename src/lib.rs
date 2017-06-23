@@ -54,13 +54,16 @@ impl Client {
     fn request<'a, F>(
         &'a self,
         uri: Result<hyper::Uri>,
-        to_request: F,
-    ) -> impl Future<Item = hyper::Response, Error = Error> + 'a
+        method: hyper::Method,
+        modify_request: F,
+    ) -> impl Future<Item = hyper::Response, Error = Error>
     where
-        F: FnOnce(hyper::Uri) -> hyper::Request + 'a,
+        F: FnOnce(hyper::Request) -> hyper::Request,
     {
         future::result(uri).and_then(move |u| {
-            let mut request = to_request(u);
+            let mut request = hyper::Request::new(method, u);
+            request = modify_request(request);
+
             request.headers_mut().set(self.user_agent.clone());
 
             self.http.request(request).then(|r| {
@@ -87,8 +90,7 @@ impl Client {
             .append_pair("website", app.website)
             .finish();
 
-        self.request(request_url, |url| {
-            let mut req = hyper::Request::new(hyper::Method::Post, url);
+        self.request(request_url, hyper::Method::Post, |mut req| {
             req.set_body(body);
             req
         }).and_then(|res| {
@@ -126,9 +128,8 @@ impl Client {
                 })
             });
 
-        self.request(request_url, move |url| {
-            hyper::Request::new(hyper::Method::Post, url)
-        }).and_then(|res| {
+        self.request(request_url, hyper::Method::Post, |req| req)
+            .and_then(|res| {
                 res.body().concat2().then(
                     |r| r.chain_err(|| ErrorKind::Http),
                 )
@@ -156,12 +157,10 @@ impl Client {
             ErrorKind::Uri(request_url.to_string())
         });
 
-        let chunks = self.request(parsed_url, move |url| {
-            let mut req = hyper::Request::new(hyper::Method::Get, url);
+        let chunks = self.request(parsed_url, hyper::Method::Get, |mut req| {
             req.headers_mut().set(hyper::header::Authorization(
                 hyper::header::Bearer { token: access_token.into() },
             ));
-
             req
         }).map(|res| {
                 res.body().then(
