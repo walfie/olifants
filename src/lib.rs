@@ -21,13 +21,14 @@ pub mod timeline;
 
 use error::*;
 use futures::{Future, IntoFuture, Stream, future};
+use hyper::header::UserAgent;
 use hyper_tls::HttpsConnector;
 use std::borrow::Cow;
 use tokio_core::reactor::Handle;
 
-pub struct Client {
-    http: hyper::client::Client<hyper_tls::HttpsConnector<hyper::client::HttpConnector>>,
-    user_agent: hyper::header::UserAgent,
+pub struct Client<H = HttpsConnector<hyper::client::HttpConnector>> {
+    http: hyper::client::Client<H>,
+    user_agent: UserAgent,
 }
 
 impl Client {
@@ -35,7 +36,6 @@ impl Client {
     where
         U: Into<Cow<'static, str>>,
     {
-        // TODO: Don't hardcode 4
         let connector = HttpsConnector::new(4, &handle).chain_err(
             || ErrorKind::Initialization,
         )?;
@@ -46,8 +46,18 @@ impl Client {
 
         Ok(Client {
             http,
-            user_agent: hyper::header::UserAgent::new(user_agent),
+            user_agent: UserAgent::new(user_agent),
         })
+    }
+
+    pub fn from_hyper_client<H, U>(hyper: hyper::Client<H>, user_agent: U) -> Client<H>
+    where
+        U: Into<Cow<'static, str>>,
+    {
+        Client {
+            http: hyper,
+            user_agent: UserAgent::new(user_agent),
+        }
     }
 
     fn request<F>(
@@ -97,6 +107,29 @@ impl Client {
         })
     }
 
+    fn request_json<T, F>(
+        &self,
+        uri: Result<hyper::Uri>,
+        method: hyper::Method,
+        modify_request: F,
+    ) -> impl Future<Item = T, Error = Error>
+    where
+        F: FnOnce(hyper::Request) -> hyper::Request,
+        T: serde::de::DeserializeOwned,
+    {
+        self.request(uri, method, modify_request).and_then(|res| {
+            res.body()
+                .concat2()
+                .then(|r| r.chain_err(|| ErrorKind::Http))
+                .and_then(|bytes| {
+                    serde_json::from_slice(&bytes).chain_err(|| {
+                        let invalid_json = String::from_utf8_lossy(&bytes);
+                        ErrorKind::Deserialize(invalid_json.into())
+                    })
+                })
+        })
+    }
+
     pub fn create_app(
         &self,
         instance_url: &str,
@@ -110,20 +143,10 @@ impl Client {
 
         let body = app.as_form_urlencoded();
 
-        self.request(request_url, hyper::Method::Post, |mut req| {
+        self.request_json(request_url, hyper::Method::Post, |mut req| {
             req.set_body(body);
             req
-        }).and_then(|res| {
-                res.body().concat2().then(
-                    |r| r.chain_err(|| ErrorKind::Http),
-                )
-            })
-            .and_then(|bytes| {
-                let json_str = String::from_utf8_lossy(&bytes);
-                serde_json::from_str(&json_str).chain_err(|| {
-                    ErrorKind::Deserialize(json_str.to_string())
-                })
-            })
+        })
     }
 
     pub fn get_token(
@@ -148,18 +171,7 @@ impl Client {
                 })
             });
 
-        self.request(request_url, hyper::Method::Post, |req| req)
-            .and_then(|res| {
-                res.body().concat2().then(
-                    |r| r.chain_err(|| ErrorKind::Http),
-                )
-            })
-            .and_then(|bytes| {
-                let json_str = String::from_utf8_lossy(&bytes);
-                serde_json::from_str(&json_str).chain_err(|| {
-                    ErrorKind::Deserialize(json_str.to_string())
-                })
-            })
+        self.request_json(request_url, hyper::Method::Post, |req| req)
     }
 
     pub fn timeline<S>(
