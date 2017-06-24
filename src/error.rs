@@ -1,3 +1,5 @@
+use hyper;
+
 error_chain!{
     errors {
         Initialization {
@@ -9,6 +11,21 @@ error_chain!{
         }
         Http {
             description("HTTP error")
+        }
+        StatusCode(
+            status: hyper::StatusCode,
+            version: hyper::HttpVersion,
+            headers: hyper::Headers,
+            body: String
+        ) {
+            description("Received non-2XX status code from server")
+            display(
+                "HTTP error\n{} {}\n{}\n{}",
+                version,
+                status,
+                headers,
+                body
+            )
         }
         Deserialize(value: String) {
             description("could not deserialize value")

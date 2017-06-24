@@ -20,7 +20,7 @@ pub mod api;
 pub mod timeline;
 
 use error::*;
-use futures::{Future, IntoFuture, Stream};
+use futures::{Future, IntoFuture, Stream, future};
 use hyper_tls::HttpsConnector;
 use std::borrow::Cow;
 use tokio_core::reactor::Handle;
@@ -59,7 +59,7 @@ impl Client {
     where
         F: FnOnce(hyper::Request) -> hyper::Request,
     {
-        uri.map(move |valid_uri| {
+        let response = uri.map(move |valid_uri| {
             let mut req = hyper::Request::new(method, valid_uri);
             req.headers_mut().set(self.user_agent.clone());
             req = modify_request(req);
@@ -68,7 +68,33 @@ impl Client {
                 |r| r.chain_err(|| ErrorKind::Http),
             )
         }).into_future()
-            .flatten()
+            .flatten();
+
+        // If we receive a non-2XX error code, extract the body
+        // into a string and return the response as an error
+        response.and_then(|mut resp| if resp.status().is_success() {
+            future::Either::A(future::ok(resp))
+        } else {
+            let version = resp.version();
+            let status = resp.status();
+
+            let mut headers = hyper::Headers::new();
+            ::std::mem::swap(&mut headers, resp.headers_mut());
+
+            let as_error = resp.body()
+                .concat2()
+                .then(|r| r.chain_err(|| ErrorKind::Http))
+                .and_then(move |bytes| {
+                    bail!(ErrorKind::StatusCode(
+                        status,
+                        version,
+                        headers,
+                        String::from_utf8_lossy(&bytes).into(),
+                    ));
+                });
+
+            future::Either::B(as_error)
+        })
     }
 
     pub fn create_app(

@@ -63,7 +63,7 @@ impl Scope {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CreateAppResponse {
     pub id: u32,
     pub redirect_uri: String,
@@ -71,7 +71,7 @@ pub struct CreateAppResponse {
     pub client_secret: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct TokenResponse {
     pub access_token: String,
     pub refresh_token: Option<String>,
