@@ -15,7 +15,7 @@ fn main() {
     let app = oauth::App {
         client_name: "Example",
         redirect_uris: oauth::OOB_REDIRECT_URI,
-        scopes: &[oauth::Scope::Read],
+        scopes: oauth::Scopes::new([oauth::Scope::Read]),
         website: "https://example.com",
     };
 

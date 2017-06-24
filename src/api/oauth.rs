@@ -5,44 +5,60 @@ use url;
 pub struct App<'a> {
     pub client_name: &'a str,
     pub redirect_uris: &'a str,
-    pub scopes: &'a [Scope],
+    pub scopes: Scopes<'a>,
     pub website: &'a str,
 }
 
 impl<'a> App<'a> {
     pub fn as_form_urlencoded(&self) -> String {
-        let scopes_str = self.scopes
-            .iter()
-            .map(|s| s.as_param())
-            .collect::<Vec<_>>()
-            .join(" ");
-
         url::form_urlencoded::Serializer::new(String::new())
             .append_pair("client_name", self.client_name)
             .append_pair("redirect_uris", self.redirect_uris)
-            .append_pair("scopes", &scopes_str)
+            .append_pair("scopes", &self.scopes.0)
             .append_pair("website", self.website)
             .finish()
     }
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct Scopes<'a>(pub Cow<'a, str>);
+
+impl<'a> Scopes<'a> {
+    pub fn new<S>(scopes: S) -> Self
+    where
+        S: AsRef<[Scope]>,
+    {
+        Scopes(
+            scopes
+                .as_ref()
+                .iter()
+                .map(|s| s.as_param())
+                .collect::<Vec<_>>()
+                .join(" ")
+                .into(),
+        )
+    }
+
+    pub fn from_str(scopes: &'a str) -> Self {
+        Scopes(scopes.into())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Scope {
     Read,
     Write,
     Follow,
-    Other(String),
 }
 
 impl Scope {
-    pub fn as_param(&self) -> Cow<'static, str> {
+    pub fn as_param(&self) -> &'static str {
         use self::Scope::*;
 
         match *self {
-            Read => "read".into(),
-            Write => "write".into(),
-            Follow => "follow".into(),
-            Other(ref s) => s.clone().into(),
+            Read => "read",
+            Write => "write",
+            Follow => "follow",
         }
     }
 }
@@ -84,11 +100,20 @@ mod test {
     use super::*;
 
     #[test]
+    fn scopes_constructor() {
+        let scopes1 = Scopes::new([Scope::Read, Scope::Write, Scope::Follow]);
+        assert_eq!(scopes1.0, "read write follow");
+
+        let scopes2 = Scopes::from_str("whatever");
+        assert_eq!(scopes2.0, "whatever");
+    }
+
+    #[test]
     fn app_as_form_urlencoded() {
         let app = App {
             client_name: "Example",
             redirect_uris: "https://example.com/hello",
-            scopes: &[Scope::Read, Scope::Write, Scope::Other("unknown".into())],
+            scopes: Scopes::from_str("read write whatever"),
             website: "https://example.com",
         };
 
@@ -96,7 +121,7 @@ mod test {
             app.as_form_urlencoded(),
             "client_name=Example\
             &redirect_uris=https%3A%2F%2Fexample.com%2Fhello\
-            &scopes=read+write+unknown\
+            &scopes=read+write+whatever\
             &website=https%3A%2F%2Fexample.com"
         );
     }
