@@ -1,15 +1,20 @@
-extern crate olifants;
+#[macro_use]
+extern crate error_chain;
 
+extern crate olifants;
 extern crate futures;
 extern crate tokio_core;
 
 use futures::Stream;
 use olifants::{Client, timeline};
+use olifants::error::*;
 use tokio_core::reactor::Core;
 
-fn main() {
-    let mut core = Core::new().expect("could not create Core");
-    let client = Client::new(&core.handle(), "olifants").expect("could not create client");
+quick_main!(|| -> Result<()> {
+    let mut core = Core::new().chain_err(|| "could not create Core")?;
+    let client = Client::new(&core.handle(), "olifants").chain_err(
+        || "could not create Client",
+    )?;
 
     let access_token = "";
 
@@ -22,5 +27,5 @@ fn main() {
     core.run(timeline.for_each(|s| {
         println!("{:?}", s);
         Ok(())
-    })).unwrap();
-}
+    })).chain_err(|| "received error from timeline")
+});
