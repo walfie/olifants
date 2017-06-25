@@ -7,6 +7,7 @@ extern crate tokio_core;
 
 use futures::Future;
 use olifants::Client;
+use olifants::api::oauth;
 use olifants::error::*;
 use tokio_core::reactor::Core;
 
@@ -20,10 +21,16 @@ quick_main!(|| -> Result<()> {
     let client_secret = "";
     let code = "";
 
-    let token = client.get_token("https://mastodon.social", client_id, client_secret, code);
+    let token = client.get_token(
+        "https://mastodon.social",
+        oauth::OOB_REDIRECT_URI,
+        client_id,
+        client_secret,
+        code,
+    );
 
-    core.run(token.map(|result| {
-        println!("{:?}", result);
+    core.run(token.map(|resp| {
+        println!("{:?}", resp);
         ()
     })).chain_err(|| "request failed")
 });

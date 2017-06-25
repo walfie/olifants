@@ -152,6 +152,7 @@ impl Client {
     pub fn get_token(
         &self,
         instance_url: &str,
+        redirect_uri: &str,
         client_id: &str,
         client_secret: &str,
         code: &str,
@@ -162,9 +163,11 @@ impl Client {
             .chain_err(|| ErrorKind::Uri(base_url.to_string()))
             .and_then(|mut url| {
                 url.query_pairs_mut()
+                    .append_pair("grant_type", "authorization_code")
                     .append_pair("client_id", client_id)
                     .append_pair("client_secret", client_secret)
-                    .append_pair("code", code);
+                    .append_pair("code", code)
+                    .append_pair("redirect_uri", redirect_uri);
 
                 url.as_str().parse::<hyper::Uri>().chain_err(|| {
                     ErrorKind::Uri(url.into_string())

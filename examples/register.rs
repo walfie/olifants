@@ -17,6 +17,8 @@ quick_main!(|| -> Result<()> {
         || "could not create Client",
     )?;
 
+    let instance_url = "https://mastodon.social";
+
     let app = oauth::App {
         client_name: "Example",
         redirect_uris: oauth::OOB_REDIRECT_URI,
@@ -24,9 +26,21 @@ quick_main!(|| -> Result<()> {
         website: "https://example.com",
     };
 
-    let create = client.create_app("https://mastodon.social", &app);
+    let create = client.create_app(instance_url, &app);
 
-    core.run(create.map(|result| {
-        println!("{:?}", result);
+    core.run(create.map(|resp| {
+        println!("Created app successfully!");
+        println!("id: {}", resp.id);
+        println!("redirect_uri: {}", resp.redirect_uri);
+        println!("client_id: {}", resp.client_id);
+        println!("client_secret: {}", resp.client_secret);
+
+        println!("");
+
+        println!("Please visit the following URL to obtain an authorization code:");
+        println!(
+            "{}",
+            oauth::authorization_url(instance_url, &resp.client_id, &resp.redirect_uri)
+        );
     })).chain_err(|| "request failed")
 });
