@@ -1,9 +1,12 @@
+use chrono;
+
+pub type DateTime = chrono::DateTime<chrono::Utc>;
 pub type StatusId = i64;
 pub type AccountId = i64;
 pub type MentionId = i64;
 pub type AttachmentId = i64;
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Status {
     pub id: StatusId,
     pub uri: String,
@@ -13,7 +16,7 @@ pub struct Status {
     pub in_reply_to_account_id: Option<AccountId>,
     pub reblog: Option<Box<Status>>,
     pub content: String,
-    pub created_at: String,
+    pub created_at: DateTime,
     pub reblogs_count: i32,
     pub favourites_count: i32,
     pub reblogged: Option<bool>,
@@ -48,14 +51,14 @@ pub struct Application {
     pub website: Option<String>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Account {
     pub id: AccountId,
     pub username: String,
     pub acct: String,
     pub display_name: String,
     pub locked: bool,
-    pub created_at: String,
+    pub created_at: DateTime,
     pub followers_count: i32,
     pub following_count: i32,
     pub statuses_count: i32,
@@ -78,12 +81,12 @@ pub struct Attachment {
     pub text_url: Option<String>, // TODO: Add meta (dimensions, etc)
 }
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Notification {
     pub id: i64,
     #[serde(rename = "type")]
     pub notification_type: String, // TODO: Enum values -- mention, reblog, favourite, follow
-    pub created_at: String,
+    pub created_at: DateTime,
     pub account: Account,
     pub status: Option<Status>,
 }

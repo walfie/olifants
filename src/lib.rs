@@ -8,6 +8,7 @@ extern crate error_chain;
 #[macro_use]
 extern crate futures;
 
+extern crate chrono;
 extern crate hyper;
 extern crate hyper_tls;
 extern crate serde;
