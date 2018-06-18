@@ -2,9 +2,9 @@ use chrono;
 
 pub type DateTime = chrono::DateTime<chrono::Utc>;
 pub type StatusId = String;
-pub type AccountId = i64;
-pub type MentionId = i64;
-pub type AttachmentId = i64;
+pub type AccountId = String;
+pub type MentionId = String;
+pub type AttachmentId = String;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Status {
